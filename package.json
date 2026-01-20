@@ -1,0 +1,22 @@
+{
+  "name": "obsidian-task-scheduler",
+  "version": "1.0.0",
+  "description": "Автоматически переносит задачи с датами в ежедневные заметки",
+  "main": "main.js",
+  "scripts": {
+    "build": "tsc main.ts --lib es2015,dom --skipLibCheck --outDir ."
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "tasks",
+    "daily-notes",
+    "productivity"
+  ],
+  "author": "djTape2008",
+  "license": "MIT",
+  "devDependencies": {
+    "obsidian": "latest",
+    "typescript": "^5.0.0"
+  }
+}

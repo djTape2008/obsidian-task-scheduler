@@ -1,0 +1,56 @@
+.task-scheduler-instructions {
+    background-color: var(--background-secondary);
+    padding: 15px;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+
+.task-scheduler-instructions code {
+    background-color: var(--background-primary);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: var(--font-monospace);
+}
+
+.task-scheduler-instructions pre {
+    background-color: var(--background-primary);
+    padding: 10px;
+    border-radius: 5px;
+    overflow-x: auto;
+    margin: 10px 0;
+}
+
+.task-scheduler-instructions ol,
+.task-scheduler-instructions ul {
+    margin-left: 20px;
+}
+
+.task-scheduler-instructions p {
+    margin: 10px 0;
+}
+
+/* Стили для автодополнения */
+.date-suggest-item {
+    padding: 4px 8px;
+}
+
+.date-suggest-title {
+    font-weight: 500;
+    color: var(--text-normal);
+    font-size: 14px;
+}
+
+.date-suggest-description {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.suggestion-item.is-selected .date-suggest-title {
+    color: var(--text-on-accent);
+}
+
+.suggestion-item.is-selected .date-suggest-description {
+    color: var(--text-on-accent);
+    opacity: 0.8;
+}
