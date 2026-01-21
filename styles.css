@@ -29,28 +29,61 @@
     margin: 10px 0;
 }
 
+/* Скрытые даты - показываем только эмодзи */
+.hidden-date {
+    cursor: help;
+    position: relative;
+    display: inline-block;
+}
+
+/* Показываем дату при наведении */
+.hidden-date:hover::after {
+    content: attr(data-date);
+    position: absolute;
+    left: 0;
+    top: -25px;
+    background: var(--background-modifier-border);
+    color: var(--text-normal);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
 /* Стили для автодополнения */
 .date-suggest-item {
-    padding: 4px 8px;
+    padding: 6px 12px;
 }
 
 .date-suggest-title {
     font-weight: 500;
     color: var(--text-normal);
     font-size: 14px;
+    margin-bottom: 2px;
 }
 
-.date-suggest-description {
-    font-size: 12px;
+.date-suggest-date {
+    font-size: 11px;
     color: var(--text-muted);
-    margin-top: 2px;
+    font-family: var(--font-monospace);
 }
 
 .suggestion-item.is-selected .date-suggest-title {
     color: var(--text-on-accent);
 }
 
-.suggestion-item.is-selected .date-suggest-description {
+.suggestion-item.is-selected .date-suggest-date {
     color: var(--text-on-accent);
     opacity: 0.8;
+}
+
+/* Визуальное улучшение для календаря */
+.suggestion-container {
+    max-height: 400px;
+}
+
+.date-suggest-item:not(:last-child) {
+    border-bottom: 1px solid var(--background-modifier-border);
 }
