@@ -15,7 +15,7 @@
 
 ### Способ 1: Скачать релиз (рекомендуется)
 
-1. Перейдите на страницу [Releases](https://github.com/ВАШ_ЮЗЕРНЕЙМ/obsidian-task-scheduler/releases)
+1. Перейдите на страницу [Releases](https://github.com/djTape2008/obsidian-task-scheduler/releases)
 2. Скачайте последний релиз (`task-scheduler.zip`)
 3. Распакуйте архив в `.obsidian/plugins/task-scheduler/`
 4. Перезапустите Obsidian
@@ -38,7 +38,7 @@
 
 ```bash
 cd /путь/к/вашему/vault/.obsidian/plugins
-git clone https://github.com/ВАШ_ЮЗЕРНЕЙМ/obsidian-task-scheduler.git task-scheduler
+git clone https://github.com/djTape2008/obsidian-task-scheduler.git task-scheduler
 cd task-scheduler
 # Файлы уже готовы к использованию
 ```
@@ -160,7 +160,7 @@ cd task-scheduler
 ## 🤝 Вклад в проект
 
 Нашли баг или хотите предложить улучшение?
-1. Создайте [Issue](https://github.com/ВАШ_ЮЗЕРНЕЙМ/obsidian-task-scheduler/issues)
+1. Создайте [Issue](https://github.com/djTape2008/obsidian-task-scheduler/issues)
 2. Или сделайте Pull Request
 
 ## 📄 Лицензия
