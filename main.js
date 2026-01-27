@@ -4,7 +4,7 @@ const DEFAULT_SETTINGS = {
     sourceFolder: '',
     targetSection: '## Задачи',
     carryOverSection: '## Задачи',
-    enableCarryOver: true
+    enableCarryOver: false
 };
 
 class TaskSchedulerPlugin extends Plugin {
@@ -21,7 +21,7 @@ class TaskSchedulerPlugin extends Plugin {
         this.registerEvent(
             this.app.workspace.on('file-open', (file) => {
                 if (file && this.isDailyNote(file)) {
-                    this.processTasks(file);
+                    // При открытии НЕ обрабатываем ничего автоматически
                 }
             })
         );
@@ -30,6 +30,17 @@ class TaskSchedulerPlugin extends Plugin {
             this.app.vault.on('create', (file) => {
                 if (file && this.isDailyNote(file)) {
                     setTimeout(async () => {
+                        const fileDate = this.getDateFromFileName(file);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        
+                        const fileDateObj = new Date(fileDate);
+                        fileDateObj.setHours(0, 0, 0, 0);
+                        
+                        if (fileDateObj < today) {
+                            return;
+                        }
+                        
                         if (this.settings.enableCarryOver) {
                             await this.carryOverUnfinishedTasks(file);
                         }
@@ -101,175 +112,223 @@ class TaskSchedulerPlugin extends Plugin {
     }
 
     async carryOverUnfinishedTasks(todayFile) {
-        const previousFile = this.getPreviousDailyNote(todayFile);
-
-        if (!previousFile) {
-            return;
-        }
-
-        const previousContent = await this.app.vault.read(previousFile);
-        
-        const unfinishedRegex = /\s*[-*+] \[[^xX-]\].*/g;
-        const matches = previousContent.match(unfinishedRegex);
-
-        if (!matches || matches.length === 0) {
-            return;
-        }
-
-        const unfinishedTasks = matches.map(task => task.trim());
-
-        let todayContent = await this.app.vault.read(todayFile);
         const section = this.settings.carryOverSection;
+        const todayContent = await this.app.vault.read(todayFile);
+        const todayLines = todayContent.split('\n');
 
-        if (section && todayContent.includes(section)) {
-            const lines = todayContent.split('\n');
-            const sectionIndex = lines.findIndex(line => line.trim() === section);
-            
+        // --- задачи, которые УЖЕ есть сегодня ---
+        const todayTasks = new Set();
+
+        let sectionIndex = -1;
+        if (section) {
+            sectionIndex = todayLines.findIndex(l => l.trim() === section);
             if (sectionIndex !== -1) {
-                let insertIndex = sectionIndex + 1;
-                
-                while (insertIndex < lines.length && lines[insertIndex].trim() === '') {
-                    insertIndex++;
+                for (let i = sectionIndex + 1; i < todayLines.length; i++) {
+                    if (todayLines[i].trim().startsWith('#')) break;
+                    if (todayLines[i].trim().startsWith('- [ ]')) {
+                        todayTasks.add(todayLines[i].trim());
+                    }
                 }
-
-                lines.splice(insertIndex, 0, ...unfinishedTasks);
-                todayContent = lines.join('\n');
-                await this.app.vault.modify(todayFile, todayContent);
             }
-        } else {
-            if (!todayContent.endsWith('\n\n')) {
-                todayContent += '\n\n';
-            }
-            if (section) {
-                todayContent += `${section}\n`;
-            }
-            todayContent += unfinishedTasks.join('\n') + '\n';
-            await this.app.vault.modify(todayFile, todayContent);
         }
 
-        new Notice(`Перенесено ${unfinishedTasks.length} незавершённых задач из ${previousFile.basename}`);
+        // --- предыдущая daily ---
+        const previousFile = this.getPreviousDailyNote(todayFile);
+        if (!previousFile) return;
+
+        const prevContent = await this.app.vault.read(previousFile);
+        const prevLines = prevContent.split('\n');
+
+        // --- переносим ВСЕ незавершённые, сохраняя порядок и дубли ---
+        const tasksToInsert = [];
+
+        for (const line of prevLines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('- [ ]')) continue;
+
+            // защита только от повторного переноса в today
+            if (!todayTasks.has(trimmed)) {
+                tasksToInsert.push(trimmed);
+            }
+        }
+
+        if (tasksToInsert.length === 0) return;
+
+        // --- вставка ---
+        let newContent = todayContent;
+
+        if (sectionIndex !== -1) {
+            let insertIndex = sectionIndex + 1;
+            while (
+                insertIndex < todayLines.length &&
+                todayLines[insertIndex].trim() === ''
+            ) {
+                insertIndex++;
+            }
+
+            todayLines.splice(insertIndex, 0, ...tasksToInsert);
+            newContent = todayLines.join('\n');
+        } else {
+            newContent = todayContent.trimEnd() + '\n\n';
+            if (section) newContent += section + '\n';
+            newContent += tasksToInsert.join('\n') + '\n';
+        }
+
+        await this.app.vault.modify(todayFile, newContent);
+        new Notice(`Перенесено ${tasksToInsert.length} незавершённых задач`);
     }
 
+
+
     async addRecurringTasks(todayFile) {
-        const files = this.app.vault.getMarkdownFiles().filter(file => 
-            this.settings.sourceFolder ? file.path.startsWith(this.settings.sourceFolder + '/') : true
-        );
+    if (!this.settings.sourceFolder) return;
 
-        const todayDate = new Date(this.getDateFromFileName(todayFile));
-        const dayOfWeek = todayDate.getDay();
-        const dayOfMonth = todayDate.getDate();
-        const tasksToAdd = [];
+    const section = this.settings.targetSection;
+    const todayContent = await this.app.vault.read(todayFile);
+    const todayLines = todayContent.split('\n');
 
-        for (const file of files) {
-            const content = await this.app.vault.read(file);
-            const lines = content.split('\n');
+    // --- дата today ---
+    const todayDate = new Date(this.getDateFromFileName(todayFile));
+    const dayOfWeek = todayDate.getDay();
+    const dayOfMonth = todayDate.getDate();
 
-            for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (!trimmedLine || trimmedLine.startsWith('#')) continue;
+    // --- существующие задачи в daily ---
+    const existingTasks = new Set();
 
-                if (trimmedLine.match(/^[-*+] \[ \]/)) {
-                    const repeatMatch = trimmedLine.match(/<span class="repeat-pattern" data-pattern="([^"]+)">🔁<\/span>/);
-                    
-                    if (repeatMatch) {
-                        const pattern = repeatMatch[1].toLowerCase();
-                        let shouldAdd = false;
-
-                        switch (pattern) {
-                            case 'daily':
-                            case 'ежедневно':
-                                shouldAdd = true;
-                                break;
-                            case 'workdays':
-                            case 'будни':
-                                shouldAdd = dayOfWeek >= 1 && dayOfWeek <= 5;
-                                break;
-                            case 'weekends':
-                            case 'выходные':
-                                shouldAdd = dayOfWeek === 0 || dayOfWeek === 6;
-                                break;
-                            case 'weekly':
-                            case 'еженедельно':
-                                shouldAdd = dayOfWeek === 1;
-                                break;
-                            case 'monday':
-                            case 'пн':
-                                shouldAdd = dayOfWeek === 1;
-                                break;
-                            case 'tuesday':
-                            case 'вт':
-                                shouldAdd = dayOfWeek === 2;
-                                break;
-                            case 'wednesday':
-                            case 'ср':
-                                shouldAdd = dayOfWeek === 3;
-                                break;
-                            case 'thursday':
-                            case 'чт':
-                                shouldAdd = dayOfWeek === 4;
-                                break;
-                            case 'friday':
-                            case 'пт':
-                                shouldAdd = dayOfWeek === 5;
-                                break;
-                            case 'saturday':
-                            case 'сб':
-                                shouldAdd = dayOfWeek === 6;
-                                break;
-                            case 'sunday':
-                            case 'вс':
-                                shouldAdd = dayOfWeek === 0;
-                                break;
-                            case 'monthly':
-                            case 'ежемесячно':
-                                shouldAdd = dayOfMonth === 1;
-                                break;
-                            default:
-                                const intervalMatch = pattern.match(/^every-(\d+)-days$/);
-                                if (intervalMatch) {
-                                    const interval = parseInt(intervalMatch[1]);
-                                    const startOfYear = new Date(todayDate.getFullYear(), 0, 1);
-                                    const daysSinceStart = Math.floor((todayDate.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24));
-                                    shouldAdd = daysSinceStart % interval === 0;
-                                }
-                                break;
-                        }
-
-                        if (shouldAdd) {
-                            const cleanTask = trimmedLine.replace(/<span class="repeat-pattern" data-pattern="[^"]+">🔁<\/span>\s*/g, '').trim();
-                            tasksToAdd.push(cleanTask);
-                        }
-                    }
+    let sectionIndex = -1;
+    if (section) {
+        sectionIndex = todayLines.findIndex(l => l.trim() === section);
+        if (sectionIndex !== -1) {
+            for (let i = sectionIndex + 1; i < todayLines.length; i++) {
+                if (todayLines[i].trim().startsWith('#')) break;
+                if (todayLines[i].trim().startsWith('- [ ]')) {
+                    existingTasks.add(todayLines[i].trim());
                 }
             }
         }
+    }
 
-        if (tasksToAdd.length > 0) {
-            let todayContent = await this.app.vault.read(todayFile);
-            const section = this.settings.targetSection;
+    // --- собираем повторяющиеся задачи ---
+    const files = this.app.vault.getMarkdownFiles().filter(file =>
+        file.path.startsWith(this.settings.sourceFolder + '/')
+        && !/^\d{4}-\d{2}-\d{2}\.md$/.test(file.name)
+    );
 
-            if (section && todayContent.includes(section)) {
-                const lines = todayContent.split('\n');
-                const sectionIndex = lines.findIndex(line => line.trim() === section);
-                
-                if (sectionIndex !== -1) {
-                    let insertIndex = sectionIndex + 1;
-                    while (insertIndex < lines.length && lines[insertIndex].trim() === '') {
-                        insertIndex++;
+    const tasksToInsert = [];
+
+    for (const file of files) {
+        const content = await this.app.vault.read(file);
+        const lines = content.split('\n');
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('- [ ]')) continue;
+
+            const repeatMatch = trimmed.match(
+                /<span class="repeat-pattern" data-pattern="([^"]+)">🔁<\/span>/
+            );
+            if (!repeatMatch) continue;
+
+            const pattern = repeatMatch[1].toLowerCase();
+            let shouldAdd = false;
+
+            switch (pattern) {
+                case 'daily':
+                case 'ежедневно':
+                    shouldAdd = true;
+                    break;
+                case 'workdays':
+                case 'будни':
+                    shouldAdd = dayOfWeek >= 1 && dayOfWeek <= 5;
+                    break;
+                case 'weekends':
+                case 'выходные':
+                    shouldAdd = dayOfWeek === 0 || dayOfWeek === 6;
+                    break;
+                case 'weekly':
+                case 'еженедельно':
+                case 'monday':
+                case 'пн':
+                    shouldAdd = dayOfWeek === 1;
+                    break;
+                case 'tuesday':
+                case 'вт':
+                    shouldAdd = dayOfWeek === 2;
+                    break;
+                case 'wednesday':
+                case 'ср':
+                    shouldAdd = dayOfWeek === 3;
+                    break;
+                case 'thursday':
+                case 'чт':
+                    shouldAdd = dayOfWeek === 4;
+                    break;
+                case 'friday':
+                case 'пт':
+                    shouldAdd = dayOfWeek === 5;
+                    break;
+                case 'saturday':
+                case 'сб':
+                    shouldAdd = dayOfWeek === 6;
+                    break;
+                case 'sunday':
+                case 'вс':
+                    shouldAdd = dayOfWeek === 0;
+                    break;
+                case 'monthly':
+                case 'ежемесячно':
+                    shouldAdd = dayOfMonth === 1;
+                    break;
+                default: {
+                    const m = pattern.match(/^every-(\d+)-days$/);
+                    if (m) {
+                        const interval = Number(m[1]);
+                        const start = new Date(todayDate.getFullYear(), 0, 1);
+                        const diff = Math.floor(
+                            (todayDate - start) / 86400000
+                        );
+                        shouldAdd = diff % interval === 0;
                     }
-                    lines.splice(insertIndex, 0, ...tasksToAdd);
-                    todayContent = lines.join('\n');
-                    await this.app.vault.modify(todayFile, todayContent);
                 }
-            } else {
-                if (!todayContent.endsWith('\n\n')) todayContent += '\n\n';
-                if (section) todayContent += `${section}\n`;
-                todayContent += tasksToAdd.join('\n') + '\n';
-                await this.app.vault.modify(todayFile, todayContent);
             }
 
-            new Notice(`Добавлено ${tasksToAdd.length} повторяющихся задач(и)`);
+            if (!shouldAdd) continue;
+
+            const cleanTask = trimmed
+                .replace(/<span class="repeat-pattern"[^>]*>🔁<\/span>/g, '')
+                .trim();
+
+            if (!existingTasks.has(cleanTask)) {
+                tasksToInsert.push(cleanTask);
+                existingTasks.add(cleanTask); // защита от дублей в одном проходе
+            }
         }
+    }
+
+    if (tasksToInsert.length === 0) return;
+
+    // --- вставка ---
+    let newContent = todayContent;
+
+    if (sectionIndex !== -1) {
+        let insertIndex = sectionIndex + 1;
+        while (
+            insertIndex < todayLines.length &&
+            todayLines[insertIndex].trim() === ''
+        ) {
+            insertIndex++;
+        }
+
+        todayLines.splice(insertIndex, 0, ...tasksToInsert);
+        newContent = todayLines.join('\n');
+    } else {
+        newContent = todayContent.trimEnd() + '\n\n';
+        if (section) newContent += section + '\n';
+        newContent += tasksToInsert.join('\n') + '\n';
+    }
+
+    await this.app.vault.modify(todayFile, newContent);
+    new Notice(`Добавлено ${tasksToInsert.length} повторяющихся задач`);
     }
 
     async processTasks(dailyFile) {
@@ -338,15 +397,14 @@ class TaskSchedulerPlugin extends Plugin {
                     insertIndex++;
                 }
 
-                const existingTasks = new Set();
-                for (let i = insertIndex; i < lines.length; i++) {
-                    if (lines[i].startsWith('#')) break;
-                    if (lines[i].trim().startsWith('- [ ]')) {
-                        existingTasks.add(lines[i].trim());
-                    }
-                }
+                const existingTasks = new Set(
+                lines
+                    .slice(sectionIndex + 1)
+                    .filter(l => l.trim().startsWith('- [ ]'))
+                    .map(l => l.trim())
+                );
 
-                const newTasks = taskTexts.filter(task => !existingTasks.has(task));
+                const newTasks = tasksToAdd.filter(t => !existingTasks.has(t));
                 if (newTasks.length > 0) {
                     lines.splice(insertIndex, 0, ...newTasks);
                     content = lines.join('\n');
@@ -398,7 +456,7 @@ class TaskSchedulerPlugin extends Plugin {
     }
 }
 
-// Подсказка для ::date_to
+// Подсказка для :: (показывает date_to и repeat)
 class DateTriggerSuggest extends EditorSuggest {
     constructor(app, plugin) {
         super(app);
@@ -409,12 +467,12 @@ class DateTriggerSuggest extends EditorSuggest {
         const line = editor.getLine(cursor.line);
         const textBeforeCursor = line.substring(0, cursor.ch);
         
-        const match = textBeforeCursor.match(/::(date_to)?$/);
+        const match = textBeforeCursor.match(/::$/);
         if (match) {
             return {
-                start: { line: cursor.line, ch: cursor.ch - match[0].length },
+                start: { line: cursor.line, ch: cursor.ch - 2 },
                 end: cursor,
-                query: match[1] || ''
+                query: ''
             };
         }
 
@@ -422,26 +480,23 @@ class DateTriggerSuggest extends EditorSuggest {
     }
 
     getSuggestions(context) {
-        const query = context.query.toLowerCase();
-        
-        if (query === '' || 'date_to'.startsWith(query)) {
-            return ['date_to'];
-        }
-
-        return [];
+        return [
+            { type: 'date_to', label: 'date_to', description: '📅 Выбрать дату из календаря' },
+            { type: 'repeat', label: 'repeat', description: '🔁 Создать повторяющуюся задачу' }
+        ];
     }
 
     renderSuggestion(value, el) {
         const container = el.createDiv({ cls: 'date-trigger-suggest' });
         
         const icon = container.createSpan({ cls: 'date-trigger-icon' });
-        icon.setText('📅');
+        icon.setText(value.type === 'date_to' ? '📅' : '🔁');
         
         const text = container.createSpan({ cls: 'date-trigger-text' });
-        text.setText('date_to');
+        text.setText(value.label);
         
         const hint = container.createDiv({ cls: 'date-trigger-hint' });
-        hint.setText('Открыть календарь для выбора даты');
+        hint.setText(value.description);
     }
 
     selectSuggestion(value, evt) {
@@ -451,24 +506,39 @@ class DateTriggerSuggest extends EditorSuggest {
         const start = this.context.start;
         const end = this.context.end;
 
-        editor.replaceRange('::date_to ', start, end);
+        if (value.type === 'date_to') {
+            editor.replaceRange('::date_to ', start, end);
 
-        setTimeout(() => {
-            new CalendarModal(this.app, (date) => {
+            setTimeout(() => {
+                new CalendarModal(this.app, (date) => {
+                    const cursor = editor.getCursor();
+                    const line = editor.getLine(cursor.line);
+                    const textBefore = line.substring(0, cursor.ch);
+                    
+                    if (textBefore.endsWith('::date_to ')) {
+                        const from = { line: cursor.line, ch: cursor.ch - 10 };
+                        const to = cursor;
+                        editor.replaceRange('', from, to);
+                    }
+                    
+                    const dateSpan = `<span class="hidden-date" data-date="${date}">📅</span>`;
+                    editor.replaceRange(dateSpan, editor.getCursor());
+                }).open();
+            }, 100);
+        } else if (value.type === 'repeat') {
+            editor.replaceRange('', start, end);
+            
+            setTimeout(() => {
                 const cursor = editor.getCursor();
-                const line = editor.getLine(cursor.line);
-                const textBefore = line.substring(0, cursor.ch);
+                editor.replaceRange('::repeat', cursor);
                 
-                if (textBefore.endsWith('::date_to ')) {
-                    const from = { line: cursor.line, ch: cursor.ch - 10 };
-                    const to = cursor;
-                    editor.replaceRange('', from, to);
-                }
-                
-                const dateSpan = `<span class="hidden-date" data-date="${date}">📅</span>`;
-                editor.replaceRange(dateSpan, editor.getCursor());
-            }).open();
-        }, 100);
+                const newCursor = {
+                    line: cursor.line,
+                    ch: cursor.ch + 8
+                };
+                editor.setCursor(newCursor);
+            }, 50);
+        }
     }
 }
 
