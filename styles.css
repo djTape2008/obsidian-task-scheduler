@@ -52,38 +52,189 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* Стили для автодополнения */
-.date-suggest-item {
-    padding: 6px 12px;
+/* Стили для подсказки ::date_to */
+.date-trigger-suggest {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
 }
 
-.date-suggest-title {
+.date-trigger-icon {
+    font-size: 18px;
+}
+
+.date-trigger-text {
+    font-weight: 500;
+    color: var(--text-normal);
+    font-family: var(--font-monospace);
+}
+
+.date-trigger-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* Стили для подсказки ::repeat */
+.repeat-trigger-suggest {
+    padding: 8px 12px;
+}
+
+.repeat-trigger-title {
     font-weight: 500;
     color: var(--text-normal);
     font-size: 14px;
     margin-bottom: 2px;
 }
 
-.date-suggest-date {
+.repeat-trigger-hint {
     font-size: 11px;
     color: var(--text-muted);
-    font-family: var(--font-monospace);
 }
 
-.suggestion-item.is-selected .date-suggest-title {
-    color: var(--text-on-accent);
+/* Скрытые паттерны повторений */
+.repeat-pattern {
+    cursor: help;
+    position: relative;
+    display: inline-block;
 }
 
-.suggestion-item.is-selected .date-suggest-date {
-    color: var(--text-on-accent);
-    opacity: 0.8;
+.repeat-pattern:hover::after {
+    content: attr(data-pattern);
+    position: absolute;
+    left: 0;
+    top: -25px;
+    background: var(--background-modifier-border);
+    color: var(--text-normal);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* Визуальное улучшение для календаря */
-.suggestion-container {
-    max-height: 400px;
+/* Стили календаря */
+.calendar-modal .modal-content {
+    padding: 0;
+    max-width: 320px;
 }
 
-.date-suggest-item:not(:last-child) {
+.calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    background: var(--background-secondary);
     border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.calendar-month-year {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-normal);
+}
+
+.calendar-nav-btn {
+    background: var(--interactive-normal);
+    border: none;
+    border-radius: 4px;
+    width: 32px;
+    height: 32px;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--text-normal);
+    transition: background 0.2s;
+}
+
+.calendar-nav-btn:hover {
+    background: var(--interactive-hover);
+}
+
+.calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    padding: 12px 16px 8px 16px;
+    background: var(--background-primary);
+}
+
+.calendar-weekday {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 4px;
+}
+
+.calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    padding: 8px 16px 16px 16px;
+    background: var(--background-primary);
+}
+
+.calendar-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-normal);
+    background: var(--background-primary);
+    border: 1px solid transparent;
+}
+
+.calendar-day:not(.calendar-day-empty):not(.calendar-day-past):hover {
+    background: var(--interactive-hover);
+    border-color: var(--interactive-accent);
+}
+
+.calendar-day-today {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    font-weight: 600;
+}
+
+.calendar-day-today:hover {
+    background: var(--interactive-accent-hover);
+}
+
+.calendar-day-past {
+    color: var(--text-faint);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.calendar-day-empty {
+    cursor: default;
+}
+
+.calendar-footer {
+    padding: 12px 16px;
+    background: var(--background-secondary);
+    border-top: 1px solid var(--background-modifier-border);
+    display: flex;
+    justify-content: center;
+}
+
+.calendar-today-btn {
+    background: var(--interactive-normal);
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--text-normal);
+    transition: background 0.2s;
+    font-weight: 500;
+}
+
+.calendar-today-btn:hover {
+    background: var(--interactive-hover);
 }
