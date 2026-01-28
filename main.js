@@ -1,3 +1,6 @@
+const MAX_TIME_SINCE_CREATION = 5000; // 5 секунд
+
+
 const { Plugin, PluginSettingTab, Setting, Notice, Modal, EditorSuggest } = require('obsidian');
 
 const DEFAULT_SETTINGS = {
@@ -27,29 +30,28 @@ class TaskSchedulerPlugin extends Plugin {
         );
 
         this.registerEvent(
-            this.app.vault.on('create', (file) => {
-                if (file && this.isDailyNote(file)) {
-                    setTimeout(async () => {
-                        const fileDate = this.getDateFromFileName(file);
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        
-                        const fileDateObj = new Date(fileDate);
-                        fileDateObj.setHours(0, 0, 0, 0);
-                        
-                        if (fileDateObj < today) {
-                            return;
-                        }
-                        
-                        if (this.settings.enableCarryOver) {
-                            await this.carryOverUnfinishedTasks(file);
-                        }
-                        await this.addRecurringTasks(file);
-                        await this.processTasks(file);
-                    }, 100);
+            this.app.vault.on('create', async (file) => {
+                if (!file || !this.isDailyNote(file)) return;
+
+                const today = new Date();
+                const createdAt = file.stat.ctime;
+
+                // ⛔ файл не "только что создан"
+                if (today.getTime() - createdAt > MAX_TIME_SINCE_CREATION) {
+                    return;
                 }
+
+                // --- ТОЛЬКО ЗДЕСЬ ---
+                if (this.settings.enableCarryOver) {
+                    await this.carryOverUnfinishedTasks(file);
+                }
+
+                await this.addRecurringTasks(file);
+                await this.processTasks(file);
             })
         );
+
+
 
         this.addCommand({
             id: 'update-daily-tasks',
@@ -177,6 +179,7 @@ class TaskSchedulerPlugin extends Plugin {
         await this.app.vault.modify(todayFile, newContent);
         new Notice(`Перенесено ${tasksToInsert.length} незавершённых задач`);
     }
+
 
 
 
